@@ -29,7 +29,7 @@ The **Knot Troubleshooting System** is designed to efficiently analyze **Applica
 - **Captures and Analyzes Errors:** The script monitors for `"Traceback"` occurrences and switches to error-tracking mode. It records all traceback lines until it finds an actual error message (e.g., `"Exception:"` or `"KeyError:"`). The captured error is stored along with details like its type, location, and full trace.
 
 - **Saves Parsed Logs for Future Use:** After processing all logs, the structured data is saved in a JSON file (`"data/processed/parsed_logs.json"`). This ensures that parsed logs can be reviewed later, integrated into other tools, or used for debugging.
-<br>
+
 - [Example of Log Parsing](./CONTENT.md/#log-parsing-success)
 
  ##### Limitations:
@@ -38,7 +38,7 @@ The **Knot Troubleshooting System** is designed to efficiently analyze **Applica
 - **Error Detection Dependency:** The script only recognizes errors following a `"Traceback"` section, missing standalone error messages.
 
 - **Multi-line Data Handling:** Logs containing JSON responses or multi-line messages are not parsed correctly, leading to potential data loss.
-<br>
+
 - [Example of Log Parsing Limitations](./CONTENT.md/#log-parsing-failure)
 
 #### 2.1.2 HAR Parser
@@ -48,14 +48,13 @@ The **Knot Troubleshooting System** is designed to efficiently analyze **Applica
 - **Sanitizes Sensitive Data:** The script removes sensitive headers (`Authorization`, `Cookie`, `X-CSRF-Token`) and query parameters (`api_key`, `password`, `auth`) from URLs. This ensures that security-related information is not exposed in logs or outputs.
 
 - **Saves Processed HAR Data for Analysis:** After processing all entries, the structured data is saved in a JSON file (`"data/processed/parsed_har.json"`). This allows further debugging, performance analysis, and integration with other tools.
-<br>
+
 - [Example of HAR Parsing](./CONTENT.md/#har-parsing-success)
 
 ##### Limitations
 - **Incomplete Request or Response Data:** Some HAR files may have missing fields (`status`, `headers`, `bodySize`), leading to incomplete parsing.
-<br>
+  
 - [Example of HAR Parsing Limitations](./CONTENT.md/#har-parsing-failure)
-
 
 
 #### 2.2 Analysis Engine
@@ -71,7 +70,7 @@ The **Knot Troubleshooting System** is designed to efficiently analyze **Applica
   - By analyzing error messages and frequency, the engine pinpoints recurring problems.
 - **Actionable Insights & Recommendations**
   - Instead of just listing errors, the engine assigns severity levels, tracks failure frequency, and provides clear solutions. It helps teams prioritize fixes—whether it's session handling, API debugging, or improving payment processing.
-<br>
+
 - [Example of Analysis Engine](./CONTENT.md/#analysis-engine-success)
 
 
@@ -90,7 +89,7 @@ The **Knot Troubleshooting System** is designed to efficiently analyze **Applica
   - Supports interactive analysis via `chat_analyze()`, enabling follow-up questions and deeper insights.  
   - Integrates function calling, allowing the LLM to trigger email alerts (`send_email`) for critical failures.  
   - Optimizations like log filtering, database storage, and summarization ensure scalability for large datasets without overwhelming the system.
-<br>
+
 - [Example of LLM-Powered Transaction Analysis and Recommendation System](./CONTENT.md/#llm-powered-transaction-analysis-and-recommendation-system-success)
 
 #### 2.4 User Interface
@@ -109,7 +108,7 @@ The **Knot Troubleshooting System** is designed to efficiently analyze **Applica
   - Supports natural language queries for analyzing transaction issues.
   - Utilizes LLM function calling to send email alerts (`send_email`).
   - Provides clickable suggested prompts, enabling quick access to common troubleshooting scenarios.
-<br>
+
 - [Example of User Interface](./CONTENT.md/#user-interface-success)
 
 #### 2.5 Notification & Alert System
@@ -118,7 +117,7 @@ The **Knot Troubleshooting System** is designed to efficiently analyze **Applica
   - The system can send **email alerts** when critical failures occur.
   - It leverages **LLM function calling** to trigger email notifications.
   - **Note:** Instead of email, the system can also be configured to send **Slack notifications** for real-time alerts.
-<br>
+
 - [Example of Notification & Alert System](./CONTENT.md/#notification-alert-system-success)
 
 ## 3. Architecture Diagram
