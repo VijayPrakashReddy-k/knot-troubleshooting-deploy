@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Dict
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
@@ -13,24 +13,39 @@ def sanitize_header_value(name: str, value: str) -> str:
     sensitive_headers = {'cookie', 'authorization', 'x-csrf-token'}
     return '[REDACTED]' if name.lower() in sensitive_headers else value
 
-def sanitize_url(url: str) -> str:
-    """Remove sensitive information from URLs"""
+# def sanitize_url(url: str) -> str:
+#     """Remove sensitive information from URLs"""
+#     try:
+#         parsed = urlparse(url)
+#         params = parse_qs(parsed.query)
+        
+#         # Remove sensitive parameters
+#         sensitive_params = {'key', 'token', 'api_key', 'secret', 'password', 'auth'}
+#         sanitized_params = {
+#             k: ['[REDACTED]'] if k.lower() in sensitive_params else v
+#             for k, v in params.items()
+#         }
+        
+#         return urlunparse(parsed._replace(
+#             query=urlencode(sanitized_params, doseq=True)
+#         ))
+#     except:
+#         return url
+
+def get_route_sequence(url: str) -> Dict[str, str]:
+    """Extract route components in a generic way"""
     try:
         parsed = urlparse(url)
-        params = parse_qs(parsed.query)
+        path_parts = [p for p in parsed.path.strip('/').split('/') if p]
         
-        # Remove sensitive parameters
-        sensitive_params = {'key', 'token', 'api_key', 'secret', 'password', 'auth'}
-        sanitized_params = {
-            k: ['[REDACTED]'] if k.lower() in sensitive_params else v
-            for k, v in params.items()
+        return {
+            'base': path_parts[0] if path_parts else 'root',
+            'full_path': '/'.join(path_parts),
+            'depth': len(path_parts)
         }
-        
-        return urlunparse(parsed._replace(
-            query=urlencode(sanitized_params, doseq=True)
-        ))
-    except:
-        return url
+    except Exception as e:
+        logger.error(f"Error parsing URL route: {e}")
+        return {'base': 'unknown', 'full_path': 'unknown', 'depth': 0}
 
 def parse_har_files(files: Union[List[Path], List[UploadedFile]] = None) -> list:
     results = []
@@ -95,7 +110,7 @@ def parse_har_files(files: Union[List[Path], List[UploadedFile]] = None) -> list
                 except Exception as e:
                     logger.error(f"Error processing HAR entry: {e}")
                     continue
-                
+
         except Exception as e:
             logger.error(f"Error processing HAR file {filename}: {e}")
             continue

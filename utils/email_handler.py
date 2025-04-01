@@ -1,26 +1,33 @@
+import os
 import logging
 import smtplib
 from typing import Dict
+from pathlib import Path
+from dotenv import load_dotenv
 from email.message import EmailMessage
-import streamlit as st
 
 logger = logging.getLogger(__name__)
 
+# Get the project root directory and load .env.local file
+project_root = Path(__file__).parent.parent
+env_path = project_root / 'env' / '.env.local'
+load_dotenv(dotenv_path=env_path)
+
 class EmailHandler:
     def __init__(self):
-        """Initialize email configuration from Streamlit secrets"""
+        """Initialize email configuration from .env.local file"""
         # Load SMTP configuration with fallback values
-        self.smtp_server = st.secrets.get("SMTP_SERVER", "live.smtp.mailtrap.io")
-        self.smtp_port = int(st.secrets.get("SMTP_PORT", "587"))
-        self.smtp_username = st.secrets.get("SMTP_USERNAME", "api")
-        self.smtp_password = st.secrets.get("SMTP_PASSWORD", "your_password_here")
-        self.sender_email = st.secrets.get("SENDER_EMAIL", "hello@demomailtrap.co")
+        self.smtp_server = os.getenv("SMTP_SERVER", "live.smtp.mailtrap.io")
+        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_username = os.getenv("SMTP_USERNAME", "api")
+        self.smtp_password = os.getenv("SMTP_PASSWORD", "your_password_here")
+        self.sender_email = os.getenv("SENDER_EMAIL", "hello@demomailtrap.co")
 
         log_details = {
             'smtp_server': self.smtp_server,
             'smtp_port': self.smtp_port,
             'smtp_username': self.smtp_username,
-            'smtp_password': '*' * len(self.smtp_password) if self.smtp_password else None,
+            'smtp_password': '*' * len(self.smtp_password) if self.smtp_password else None,  # mask password
             'sender_email': self.sender_email
         }
         logger.info(f"Email configuration details: {log_details}")

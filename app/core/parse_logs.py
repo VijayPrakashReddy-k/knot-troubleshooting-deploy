@@ -10,28 +10,83 @@ def parse_error_trace(trace_lines):
     return {
         "type": trace_lines[-1] if trace_lines else None,
         "message": next((line for line in reversed(trace_lines) 
-                        if "Error:" in line), None),
+                        if "Error:" in line or "Exception:" in line), None),
         "location": next((line for line in trace_lines 
                          if "File" in line), None),
-        "full_trace": trace_lines  # Added full trace storage
+        "full_trace": trace_lines
     }
 
-def parse_log_files(files: List[UploadedFile]) -> list:
+def convert_json_to_traditional(json_logs):
+    """Convert JSON format logs to traditional format"""
+    traditional_lines = []
+    
+    # Sort logs by timestamp if available
+    if all('timestamp' in log for log in json_logs):
+        json_logs = sorted(json_logs, key=lambda x: x['timestamp'])
+    
+    current_service = None
+    for log in json_logs:
+        message = log.get("jsonPayload", {}).get("message", "")
+        labels = log.get("jsonPayload", {}).get("labels", {})
+        
+        # Start of new service log
+        if "==== Logging started for" in message:
+            current_service = message.split("for ")[-1].replace(" ====", "").strip()
+            traditional_lines.append(message)
+            
+        # Task URL
+        elif "Task URL:" in message:
+            traditional_lines.append(message)
+            
+        # Error handling
+        elif "error" in log.get("jsonPayload", {}):
+            error = log["jsonPayload"]["error"]
+            if "stacktrace" in log["jsonPayload"]:
+                traditional_lines.append("Traceback (most recent call last):")
+                traditional_lines.extend(log["jsonPayload"]["stacktrace"].split("\n"))
+            traditional_lines.append(error)
+            
+        # Regular message
+        elif message and not message.startswith("===="):
+            traditional_lines.append(message)
+            
+        # End of service log
+        elif "==== Logging ended" in message and current_service:
+            traditional_lines.append(message)
+            current_service = None
+            
+    return "\n".join(traditional_lines)
+
+def parse_log_files(files: Union[List[Path], List[UploadedFile]] = None) -> list:
     results = []
     
     if not files:
-        return results
-
+        # Default behavior - read from LOG_FOLDER
+        log_folder = Path("data/log")
+        files = list(log_folder.glob("*.log")) + list(log_folder.glob("*.json"))
+    
     for file in files:
         try:
             if isinstance(file, UploadedFile):
                 filename = file.name
-                log_lines = file.getvalue().decode('utf-8').splitlines()
+                content = file.getvalue().decode('utf-8')
             else:
                 filename = file.name
                 with open(file, 'r', encoding="utf-8") as f:
-                    log_lines = f.readlines()
-            
+                    content = f.read()
+
+            # Try parsing as JSON first
+            try:
+                json_logs = json.loads(content)
+                if isinstance(json_logs, list):
+                    # Convert JSON format to traditional format
+                    content = convert_json_to_traditional(json_logs)
+            except json.JSONDecodeError:
+                # If not JSON, use content as is
+                pass
+
+            # Process as traditional format
+            log_lines = content.splitlines()
             current_entry = None
             error_trace = []
             in_traceback = False
@@ -42,7 +97,7 @@ def parse_log_files(files: List[UploadedFile]) -> list:
                 if "==== Logging started for" in line:
                     current_entry = {
                         "file_id": filename.split('.')[0],
-                        "service": line.split("for ")[-1].replace(" ====", ""),
+                        "service": line.split("for ")[-1].replace(" ====", "").strip(),
                         "task_url": None,
                         "steps": [],
                         "status": "success",

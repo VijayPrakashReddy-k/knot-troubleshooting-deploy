@@ -31,7 +31,7 @@ suggested_prompts = {
         "Transaction status and errors",
         "Compare successful vs failed transaction flows",
         "Show me all failed transactions",
-        "What went wrong in transaction 1?",
+        "What went wrong in failed transaction?",
     ]
 }
 
@@ -99,7 +99,6 @@ def set_png_as_page_bg(png_file):
     st.markdown(page_bg_img, unsafe_allow_html=True)
 
 def load_parsed_data():
-    """Load parsed data from processed directory"""
     har_file = Path("data/processed/parsed_har.json")
     log_file = Path("data/processed/parsed_logs.json")
     
@@ -131,32 +130,48 @@ def analyze_payment_flows(har_data, log_data):
     # Match with log entries
     for log_entry in log_data:
         log_file_id = log_entry["file_id"]
-        if log_file_id in har_by_file:
-            har_entries = har_by_file[log_file_id]
-            
-            # Analyze API sequence
-            api_sequence = []
-            for entry in har_entries:
-                url = entry["url"]
-                if "payment-profiles" in url:
-                    api_sequence.append("get_profiles")
-                elif "paymentProfileCreate" in url:
-                    api_sequence.append("create_profile")
-                elif "/add?" in url:
-                    api_sequence.append("add_payment")
-            
-            flow_analysis = {
-                "file_id": log_file_id,
-                "status": log_entry["status"],
-                "error_message": log_entry["error_message"],
-                "api_calls": len(har_entries),
-                "total_response_size": sum(e["response_size"] for e in har_entries),
-                "steps_completed": len(log_entry["steps"]),
-                "api_sequence": "->".join(api_sequence) if api_sequence else "No payment APIs called"
-            }
-            results.append(flow_analysis)
+        har_entries = har_by_file.get(log_file_id, [])
+        
+        # Sort entries by step number to maintain sequence
+        har_entries.sort(key=lambda x: x.get('step_number', 0))
+        
+        # Get the flow sequence
+        api_sequence = []
+        for entry in har_entries:
+            base_route = entry.get('base_route', 'unknown')
+            full_path = entry.get('full_path', 'unknown')
+            api_sequence.append({
+                'route': base_route,
+                'path': full_path,
+                'status': entry.get('status_code', 0),
+                'method': entry.get('method', 'unknown')
+            })
+        
+        # Determine status - default to 'unknown' if not present
+        status = log_entry.get("status", "unknown")
+        if status not in ["success", "failed", "unknown"]:
+            status = "unknown"
+        
+        flow_analysis = {
+            "file_id": log_file_id,
+            "status": status,
+            "error_message": log_entry.get("error_message"),
+            "api_calls": len(har_entries),
+            "total_response_size": sum(e.get("response_size", 0) for e in har_entries),
+            "steps_completed": len(log_entry.get("steps", [])),
+            "flow_sequence": " -> ".join(step['route'] for step in api_sequence),
+            "detailed_flow": " -> ".join(step['path'] for step in api_sequence),
+            "flow_status": " -> ".join(f"{step['route']}({step['status']})" for step in api_sequence)
+        }
+        results.append(flow_analysis)
     
-    return pd.DataFrame(results)
+    df = pd.DataFrame(results)
+    
+    # Ensure status column exists with default value
+    if "status" not in df.columns:
+        df["status"] = "unknown"
+    
+    return df
 
 def display_processing_results(results):
     """Display processing results with detailed breakdown"""
@@ -308,22 +323,6 @@ def display_failure_patterns(har_data, log_data):
             st.info("No verification failures detected")
 
 def main():
-    # Check if secrets are configured
-    if not st.secrets:
-        st.error("""
-        Error: Secrets configuration not found!
-        
-        Please ensure you have created a .streamlit/secrets.toml file in your project root with the required configuration.
-        
-        Required secrets:
-        - LLM_PROVIDER
-        - LLM_MODEL
-        - LLM_TEMPERATURE
-        - API keys (OPENAI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY)
-        - SMTP configuration
-        """)
-        st.stop()
-
     # Set background image
     set_png_as_page_bg('assets/knot.jpeg')
     
@@ -354,24 +353,41 @@ def main():
             
         with col2:
             st.subheader("Upload Log Files")
-            log_files = st.file_uploader("Choose LOG files", 
-                                        type=['log'], 
+            log_files = st.file_uploader("Choose LOG files (supports both .log and .json)", 
+                                        type=['log', 'json'], 
                                         accept_multiple_files=True)
         
         # Process button section
-        if st.button("Process Files", 
-                    key="upload_btn",
-                    disabled=not (har_files or log_files)):
-            with st.spinner("Processing uploaded files..."):
-                handler = DataHandler()
-                results = handler.process_files(har_files, log_files)
-                display_processing_results(results)
-                st.session_state.files_processed = True
-                # Load processed data
-                har_data, log_data = load_parsed_data()
-                # Automatically enable chat and analysis after processing
-                st.session_state.show_chat = True
-                st.session_state.show_analysis = True
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            # Disable button if no files are uploaded
+            if st.button("Process Uploaded Files", 
+                        key="upload_btn",
+                        disabled=not (har_files or log_files)):
+                with st.spinner("Processing uploaded files..."):
+                    handler = DataHandler()
+                    results = handler.process_files(har_files, log_files)
+                    display_processing_results(results)
+                    st.session_state.files_processed = True
+                    # Load processed data
+                    har_data, log_data = load_parsed_data()
+                    # Automatically enable chat and analysis after processing
+                    st.session_state.show_chat = True
+                    st.session_state.show_analysis = True
+                        
+        with col4:
+            if st.button("Process Files from Data Folder", key="folder_btn"):
+                with st.spinner("Processing files from data folder..."):
+                    handler = DataHandler()
+                    results = handler.process_files()
+                    display_processing_results(results)
+                    st.session_state.files_processed = True
+                    # Load processed data
+                    har_data, log_data = load_parsed_data()
+                    # Automatically enable chat and analysis after processing
+                    st.session_state.show_chat = True
+                    st.session_state.show_analysis = True
         
         # Toggle for data analysis
         show_analysis = st.toggle('Show Analysis', value=st.session_state.get('show_analysis', False))
@@ -390,15 +406,24 @@ def main():
                     # Generate analysis
                     df = analyze_payment_flows(har_data, log_data)
                     
-                    # Display metrics
-                    col1, col2, col3 = st.columns(3)
+                    # Display metrics with source format
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Total Flows", len(df))
                     with col2:
-                        success_rate = (df["status"] == "success").mean() * 100
+                        success_count = (df["status"] == "success").sum()
+                        total_count = len(df)
+                        success_rate = (success_count / total_count * 100) if total_count > 0 else 0
                         st.metric("Success Rate", f"{success_rate:.1f}%")
+                        st.caption(f"Success: {success_count}, Total: {total_count}")
                     with col3:
-                        st.metric("Average API Calls", f"{df['api_calls'].mean():.1f}")
+                        avg_calls = df["api_calls"].mean() if "api_calls" in df.columns else 0
+                        st.metric("Average API Calls", f"{avg_calls:.1f}")
+                    with col4:
+                        # Add status distribution
+                        status_counts = df["status"].value_counts()
+                        status_str = ", ".join(f"{k}: {v}" for k, v in status_counts.items())
+                        st.metric("Status Distribution", status_str)
                     
                     # Display detailed analysis
                     st.subheader("Flow Details")
@@ -435,7 +460,16 @@ def main():
                     
                 with tab2:
                     if log_data:
-                        st.json(log_data)
+                        # Add format selector
+                        log_format = st.radio("Select Log Format", ["Processed", "Original"], horizontal=True)
+                        
+                        if log_format == "Processed":
+                            st.json(log_data)
+                        else:
+                            # Display original format with better JSON formatting
+                            for idx, entry in enumerate(log_data):
+                                with st.expander(f"Log Entry {idx + 1} - {entry.get('service', 'Unknown Service')}"):
+                                    st.json(entry)
                     else:
                         st.info("No log data available")
 
